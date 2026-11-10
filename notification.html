@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Notification Panel</title>
+<script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+<style>
+  :root { --bg:#0f1115; --card:#181b22; --line:rgba(255,255,255,0.08); --text:#f2f3f5; --sub:#9aa0ab; --accent:#ff8c00; --ok:#28a745; --err:#dc3545; }
+  * { margin:0; padding:0; box-sizing:border-box; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+  body { background:var(--bg); color:var(--text); min-height:100vh; padding: env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0); }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 18px 16px 40px; }
+  h1 { font-size: 20px; color: var(--accent); margin-bottom: 4px; }
+  .sub { font-size: 12px; color: var(--sub); margin-bottom: 18px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+  label { display:block; font-size: 12px; color: var(--sub); margin: 12px 0 6px; }
+  label:first-child { margin-top: 0; }
+  input, textarea, select { width:100%; background:#0f1115; color:var(--text); border:1px solid var(--line); border-radius:10px; padding: 12px; font-size: 14px; outline: none; }
+  input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+  textarea { min-height: 100px; resize: vertical; }
+  .btn { width:100%; margin-top: 16px; background: var(--accent); color:#111; border:0; border-radius: 10px; padding: 13px; font-size: 15px; font-weight: 700; cursor: pointer; }
+  .btn:disabled { opacity: .6; }
+  .btn-ghost { background: transparent; color: var(--sub); border: 1px solid var(--line); margin-top: 10px; }
+  .count { margin-top: 10px; font-size: 12px; color: var(--accent); min-height: 16px; }
+  .preview { background:#0f1115; border:1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 14px; }
+  .preview .t { font-weight: 700; font-size: 13px; color: var(--accent); margin-bottom: 4px; }
+  .preview .b { font-size: 12px; color: var(--sub); white-space: pre-wrap; }
+  .note { font-size: 11px; line-height: 1.6; color: var(--sub); background: rgba(255,140,0,0.08); border: 1px dashed rgba(255,140,0,0.5); border-radius: 10px; padding: 10px 12px; margin-bottom: 16px; }
+  .item { border-top: 1px solid var(--line); padding: 12px 0; display:flex; gap: 10px; align-items: flex-start; }
+  .item:first-child { border-top: 0; padding-top: 0; }
+  .item .main { flex: 1; min-width: 0; }
+  .item .it { font-weight: 600; font-size: 13px; }
+  .item .ib { font-size: 12px; color: var(--sub); margin-top: 2px; word-break: break-word; }
+  .tag { display:inline-block; font-size: 10px; padding: 2px 8px; border-radius: 20px; background: rgba(255,140,0,0.15); color: var(--accent); margin-top: 6px; margin-right: 6px; }
+  .time { font-size: 10px; color: var(--sub); }
+  .del { background: transparent; border: 0; color: var(--err); font-size: 18px; cursor: pointer; padding: 4px; }
+  #toast { position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%); background: var(--ok); color:#fff; padding: 11px 20px; border-radius: 22px; font-size: 13px; font-weight: 600; display:none; z-index: 99; max-width: 90%; text-align:center; }
+  #loginScreen { min-height: 100vh; display:flex; align-items:center; justify-content:center; padding: 20px; }
+  #loginScreen .card { width:100%; max-width: 380px; }
+  .err { color: var(--err); font-size: 12px; margin-top: 10px; display:none; }
+  .top { display:flex; justify-content: space-between; align-items:center; margin-bottom: 4px; }
+  .top button { background:transparent; border:1px solid var(--line); color: var(--sub); border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<div id="loginScreen" style="display:none;">
+  <div class="card">
+    <h1>🔔 Notification Panel</h1>
+    <div class="sub">Admin login (wahi email/password jo Super Admin panel mein hai)</div>
+    <label>Admin Email</label>
+    <input type="email" id="loginEmail" placeholder="admin@email.com" autocomplete="username">
+    <label>Password</label>
+    <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter') doLogin()">
+    <div class="err" id="loginErr"></div>
+    <button class="btn" id="loginBtn" onclick="doLogin()">LOGIN</button>
+  </div>
+</div>
+
+<div id="mainScreen" style="display:none;">
+  <div class="wrap">
+    <div class="top"><h1>🔔 Send Notification</h1><button onclick="doLogout()">Logout</button></div>
+    <div class="sub" id="adminEmail"></div>
+
+    <div class="note">
+      ℹ️ Ye notification user app ke bell icon mein aati hai, aur jab player ka app khula ho (ya browser tab background mein ho) tab turant popup + phone alert bhi aata hai. App poori tarah band hone par alert tab hi aayega jab FCM server alag se setup ho.
+    </div>
+
+    <div class="card">
+      <label>Title</label>
+      <input type="text" id="nTitle" maxlength="80" placeholder="Ex: Match Starting Soon! 🔥" oninput="renderPreview()">
+
+      <label>Message</label>
+      <textarea id="nBody" maxlength="400" placeholder="Apna message yaha likho..." oninput="renderPreview()"></textarea>
+
+      <label>Kisko bhejna hai?</label>
+      <select id="nAudience" onchange="onAudienceChange()">
+        <option value="all">👥 All Users (sabhi players)</option>
+        <option value="vip">👑 VIP Users</option>
+        <option value="match">🎮 Room Join kiye hue players (ek match ke)</option>
+      </select>
+
+      <div id="matchBox" style="display:none;">
+        <label>Match select karo</label>
+        <select id="nMatch" onchange="updateCount()"><option value="">Loading matches...</option></select>
+      </div>
+
+      <div class="count" id="countText"></div>
+
+      <div class="preview">
+        <div class="t" id="pvTitle">Title yaha dikhega</div>
+        <div class="b" id="pvBody">Message yaha dikhega</div>
+      </div>
+
+      <button class="btn" id="sendBtn" onclick="sendNotification()">🚀 SEND NOTIFICATION</button>
+    </div>
+
+    <div class="card">
+      <div class="top"><h1 style="font-size:15px;">Pichli Notifications</h1><button onclick="loadHistory()">Refresh</button></div>
+      <div id="historyList" style="margin-top:12px;"><div class="sub">Loading...</div></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyDHw-6OuMhCax6GPdTKUpfHPlHP8F1RdkA",
+    authDomain: "tnvesports-be595.firebaseapp.com",
+    databaseURL: "https://tnvesports-be595-default-rtdb.firebaseio.com",
+    projectId: "tnvesports-be595",
+    storageBucket: "tnvesports-be595.firebasestorage.app",
+    messagingSenderId: "9381926702",
+    appId: "1:9381926702:web:16e128802e414b681d0cbf"
+  };
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth(); const db = firebase.firestore();
+  const $ = (id) => document.getElementById(id);
+  let matches = [];
+
+  /* ====== PUSH SERVER ======
+     Cloudflare Worker ka link yaha daalo (https://xxxx.workers.dev). Khali rahe to sirf in-app notification jayegi. */
+  const PUSH_WORKER_URL = "";
+
+  async function sendPush(title, body, ids) {
+    const idToken = await auth.currentUser.getIdToken();
+    const res = await fetch(PUSH_WORKER_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken, title, body, externalIds: ids, url: location.href.replace(/[^/]*$/, 'user.html') })
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j.error || ('HTTP ' + res.status));
+    return j;
+  }
+
+  function toast(msg, isErr) {
+    const t = $('toast'); t.innerText = msg; t.style.background = isErr ? 'var(--err)' : 'var(--ok)'; t.style.display = 'block';
+    clearTimeout(window.__tt); window.__tt = setTimeout(() => { t.style.display = 'none'; }, 3000);
+  }
+
+  window.doLogin = async () => {
+    const e = $('loginEmail').value.trim(), p = $('loginPass').value; const er = $('loginErr'); er.style.display = 'none';
+    if (!e || !p) { er.innerText = 'Email aur Password daalo.'; er.style.display = 'block'; return; }
+    $('loginBtn').innerText = 'Please wait...';
+    try { await auth.signInWithEmailAndPassword(e, p); }
+    catch (x) { er.innerText = 'Login fail: ' + x.message; er.style.display = 'block'; }
+    $('loginBtn').innerText = 'LOGIN';
+  };
+  window.doLogout = async () => { if (confirm('Logout?')) await auth.signOut(); };
+
+  auth.onAuthStateChanged(async (u) => {
+    if (!u) { $('mainScreen').style.display = 'none'; $('loginScreen').style.display = 'flex'; return; }
+    // Player accounts ka "users" document hota hai; admin account ka nahi. Player ko yaha ghusne nahi dete.
+    try {
+      const pd = await db.collection('users').doc(u.uid).get();
+      if (pd.exists) {
+        await auth.signOut();
+        const er = $('loginErr'); er.innerText = 'Ye player account hai. Admin account se login karo.'; er.style.display = 'block';
+        return;
+      }
+    } catch (e) {}
+    $('loginScreen').style.display = 'none'; $('mainScreen').style.display = 'block';
+    $('adminEmail').innerText = u.email || '';
+    loadMatches(); loadHistory(); updateCount();
+  });
+
+  window.renderPreview = () => {
+    $('pvTitle').innerText = $('nTitle').value.trim() || 'Title yaha dikhega';
+    $('pvBody').innerText = $('nBody').value.trim() || 'Message yaha dikhega';
+  };
+
+  window.onAudienceChange = () => {
+    $('matchBox').style.display = $('nAudience').value === 'match' ? 'block' : 'none';
+    updateCount();
+  };
+
+  async function loadMatches() {
+    try {
+      const snap = await db.collection('tournaments').get(); matches = [];
+      snap.forEach(d => matches.push({ id: d.id, ...d.data() }));
+      const order = { 'Live': 0, 'Upcoming': 1, 'Results': 2, 'Cancelled': 3 };
+      matches.sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9) || new Date(b.time || 0) - new Date(a.time || 0));
+      const sel = $('nMatch'); sel.innerHTML = '';
+      if (!matches.length) { sel.innerHTML = '<option value="">Koi match nahi mila</option>'; return; }
+      matches.forEach(m => {
+        const n = new Set((m.joinedUsers || []).map(x => x.userDocId)).size;
+        const o = document.createElement('option'); o.value = m.id;
+        o.textContent = `${m.serial ? '[#' + m.serial + '] ' : ''}${m.name || 'Match'} — ${m.status || ''} (${n} joined)`;
+        sel.appendChild(o);
+      });
+      updateCount();
+    } catch (e) { $('nMatch').innerHTML = '<option value="">Matches load nahi hue</option>'; }
+  }
+
+  const isVipUser = (u) => u.vipExpiry && new Date() < new Date(u.vipExpiry);
+
+  window.updateCount = async () => {
+    const a = $('nAudience').value; const c = $('countText');
+    if (a === 'all') { c.innerText = 'Sabhi registered players ko jayegi.'; return; }
+    if (a === 'match') {
+      const m = matches.find(x => x.id === $('nMatch').value);
+      if (!m) { c.innerText = ''; return; }
+      const n = new Set((m.joinedUsers || []).map(x => x.userDocId)).size;
+      c.innerText = n + ' player(s) ne ye match join kiya hai.'; return;
+    }
+    c.innerText = 'VIP players gin raha hu...';
+    try { const s = await db.collection('users').get(); let n = 0; s.forEach(d => { if (isVipUser(d.data())) n++; }); c.innerText = n + ' active VIP player(s).'; }
+    catch (e) { c.innerText = ''; }
+  };
+
+  window.sendNotification = async () => {
+    const title = $('nTitle').value.trim(), body = $('nBody').value.trim(), aud = $('nAudience').value;
+    if (!title || !body) return toast('Title aur Message dono daalo!', true);
+    const doc = { title, body, category: 'Alert', createdAt: new Date(), sentBy: (auth.currentUser && auth.currentUser.email) || 'ADMIN' };
+    let label = ''; let pushIds = null;
+    if (aud === 'all') { doc.audience = 'all'; doc.targetUser = 'All'; doc.type = 'All'; label = 'ALL users'; }
+    else if (aud === 'vip') {
+      doc.audience = 'vip'; doc.targetUser = 'group:vip'; doc.type = 'VIP';
+      try { const us = await db.collection('users').get(); pushIds = []; us.forEach(d => { if (isVipUser(d.data())) pushIds.push(d.id); }); }
+      catch (e) { return toast('VIP list load nahi hui: ' + e.message, true); }
+      if (!pushIds.length) return toast('Abhi koi active VIP player nahi hai.', true);
+      label = pushIds.length + ' VIP user(s)';
+    }
+    else {
+      const m = matches.find(x => x.id === $('nMatch').value); if (!m) return toast('Pehle match select karo!', true);
+      const uids = [...new Set((m.joinedUsers || []).map(x => x.userDocId).filter(Boolean))];
+      if (!uids.length) return toast('Is match mein abhi kisi ne join nahi kiya.', true);
+      doc.audience = 'match'; doc.targetUser = 'group:match'; doc.type = 'Match'; doc.matchId = m.id; doc.matchName = m.name || ''; doc.targetUids = uids;
+      pushIds = uids; label = uids.length + ' player(s) of "' + (m.name || 'match') + '"';
+    }
+    if (!confirm('Ye notification ' + label + ' ko bhejni hai?')) return;
+    const btn = $('sendBtn'); btn.disabled = true; btn.innerText = 'Sending...';
+    try {
+      await db.collection('notifications').add(doc);
+      let pm = '';
+      if (PUSH_WORKER_URL) { try { await sendPush(title, body, pushIds); pm = ' + Push bhej diya 📲'; } catch (e) { pm = ' (In-app gayi, par Push fail: ' + e.message + ')'; } }
+      else { pm = ' (sirf in-app; Push server abhi set nahi hai)'; }
+      toast('Notification bhej di gayi ✅' + pm);
+      $('nTitle').value = ''; $('nBody').value = ''; renderPreview(); loadHistory();
+    } catch (e) { toast('Error: ' + e.message, true); }
+    btn.disabled = false; btn.innerText = '🚀 SEND NOTIFICATION';
+  };
+
+  function audienceLabel(x) {
+    if (x.audience === 'all' || (x.targetUser || '').toLowerCase() === 'all') return '👥 All Users';
+    if (x.audience === 'vip') return '👑 VIP Users';
+    if (x.audience === 'match') return '🎮 ' + (x.matchName || 'Match') + ' (' + ((x.targetUids || []).length) + ')';
+    return '👤 ' + (x.targetUser || 'Personal');
+  }
+
+  window.loadHistory = async () => {
+    const box = $('historyList');
+    try {
+      const s = await db.collection('notifications').orderBy('createdAt', 'desc').limit(20).get();
+      box.innerHTML = '';
+      if (s.empty) { box.innerHTML = '<div class="sub">Abhi koi notification nahi bheji.</div>'; return; }
+      s.forEach(d => {
+        const x = d.data();
+        const row = document.createElement('div'); row.className = 'item';
+        const main = document.createElement('div'); main.className = 'main';
+        const t = document.createElement('div'); t.className = 'it'; t.textContent = x.title || '';
+        const b = document.createElement('div'); b.className = 'ib'; b.textContent = x.body || '';
+        const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = audienceLabel(x);
+        const tm = document.createElement('span'); tm.className = 'time';
+        tm.textContent = x.createdAt && x.createdAt.toDate ? x.createdAt.toDate().toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+        main.append(t, b, tag, tm);
+        const del = document.createElement('button'); del.className = 'del'; del.innerText = '🗑';
+        del.onclick = async () => { if (!confirm('Is notification ko delete karna hai?')) return; try { await db.collection('notifications').doc(d.id).delete(); toast('Deleted'); loadHistory(); } catch (e) { toast('Delete fail: ' + e.message, true); } };
+        row.append(main, del); box.appendChild(row);
+      });
+    } catch (e) { box.innerHTML = '<div class="sub">History load nahi hui.</div>'; }
+  };
+  renderPreview();
+</script>
+</body>
+</html>
